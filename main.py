@@ -55,14 +55,47 @@ def movie_poster(path: str):
 def liveness_check():
     return {"status":"ok"}
 
-@app.get("/")
-def home():
-    return {'message':"Movie predictor"}
+
 
 indices_lower = {
     str(title).strip().lower(): idx
     for title, idx in indices.items()
 }
+
+@app.get("/home")
+def home(category: str = "popular"):
+
+    if category == "trending":
+        url = f"{BASE_URL}/trending/movie/day"
+    else:
+        url = f"{BASE_URL}/movie/{category}"
+
+    response = requests.get(
+        url,
+        headers=headers
+    )
+
+    if response.status_code == 200:
+
+        data = response.json()
+
+        movies = []
+
+        for movie in data["results"]:
+
+            movies.append(
+                {
+                    "tmdb_id": movie["id"],
+                    "title": movie["title"],
+                    "poster_url": movie_poster(movie["poster_path"]) if movie["poster_path"] else None,
+                    "rating": movie["vote_average"],
+                    "release_date": movie["release_date"]
+                }
+            )
+
+        return movies
+
+    return {"error": "Could not fetch movies"}
 
 
 def recommend(title, n=10):
@@ -81,10 +114,37 @@ def recommend(title, n=10):
 @app.post("/recommend")
 
 def get_recommend(userinput:UserInput,n:int=10):
+    movies = []
     recommendations=recommend(userinput.title,n)
+    
+    for title in recommendations:
 
-    return{
-        "recommendations":recommendations
+        url = f"{BASE_URL}/search/movie"
+
+        params = {
+            "query": title
+        }
+
+        response = requests.get(url, params=params, headers=headers)
+
+        if response.status_code == 200:
+
+            data = response.json()
+
+            if data["results"]:
+
+                movie = data["results"][0]
+
+                movies.append({
+                    "title": movie["title"],
+                    "poster_url": movie_poster(movie["poster_path"]) if movie["poster_path"] else None,
+                    "rating": movie["vote_average"],
+                    "release_date": movie["release_date"],
+                    "tmdb_id": movie["id"]
+                })
+
+    return {
+        "recommendations": movies
     }
 
 @app.get("/search")
